@@ -4,6 +4,8 @@
 
     // 默认数据表
     persistenceUtils.defTable = 'WSC_TABLE';
+    // 实体对象列表
+    persistenceUtils.entityList = [];
 
     // 需要持久化的表结构
     persistenceUtils.tableMap = {
@@ -11,7 +13,7 @@
             fieldName: 'name',
             fieldType: 'TEXT',
             tableName: 'CACHE_TABLE',
-            version: 1
+            version: 14
         }, {
             fieldName: 'desc',
             fieldType: 'TEXT',
@@ -24,17 +26,24 @@
     persistenceUtils.init = function() {
 
         // 定义实体对象
-        return persistence.define(persistenceUtils.defTable, {
+        persistence.define(persistenceUtils.defTable, {
             fieldName: 'TEXT',
             fieldType: 'TEXT',
             tableName: 'TEXT',
             version: 'INT'
+        });
+
+        // 构建默认表
+        persistence.schemaSync(null, function() {
+            // 定义其他实体
+            persistenceUtils.initOther();
         });
     }
 
     // 定义其他表结构
     persistenceUtils.initOther = function() {
         var DefTable = persistence.define(persistenceUtils.defTable);
+        persistenceUtils.entityList = [];
         // 遍历表结构
         for (var key in persistenceUtils.tableMap) {
             var v = persistenceUtils.tableMap[key];
@@ -43,18 +52,63 @@
             for (var i in v) {
                 var d = v[i];
                 def[d.fieldName] = d.fieldType;
+            }
+            if (!_.isEmpty(def) && !persistence.isDefined(key)) {
+                persistenceUtils.entityList.push(persistence.define(key, def));
+            }
+        }
+    }
+
+    // 定义其他表结构
+    persistenceUtils.addDefTable = function() {
+        var DefTable = persistence.define(persistenceUtils.defTable);
+        // 遍历表结构
+        for (var key in persistenceUtils.tableMap) {
+            var v = persistenceUtils.tableMap[key];
+
+            for (var i in v) {
+                var d = v[i];
 
                 var dr = new DefTable(d);
                 persistence.add(dr);
             }
-            if (!_.isEmpty(def)) persistence.define(key, def);
         }
         persistenceUtils.flush();
     }
 
     // 定义其他表结构
     persistenceUtils.matchTable = function(currentTables) {
+        var map = persistenceUtils.tableMap;
+        for (var k in map) {
+            // field list
+            var v = map[k];
+            var m = currentTables[k];
 
+            if (v.length != m.length) return false;
+
+            for (var i in v) {
+                // field
+                var vv = v[i];
+                var fn = vv.fieldName;
+                var ft = vv.fieldType;
+                var fv = vv.version;
+
+                var fm = false;
+                for (var j in m) {
+                    var jv = m[j];
+                    var fnj = jv.fieldName;
+                    var ftj = jv.fieldType;
+                    var fvj = jv.version;
+
+                    if (fn === fnj) {
+                        if (ft !== ftj || fv !== fvj) return false;
+                        fm = true;
+                    }
+                }
+                if (!fm) return false;
+            }
+        }
+        return true;
     }
 
     // 同步表到新结构
@@ -67,8 +121,9 @@
 
                 // 如果默认表中没有数据，插入其他表
                 if (_.isEmpty(results)) {
-                    persistenceUtils.initOther();
-                    persistence.schemaSync();
+                    persistence.schemaSync(null, function() {
+                        persistenceUtils.addDefTable();
+                    });
                     return;
                 }
 
@@ -76,33 +131,22 @@
                 var currentTables = _.groupBy(results, 'tableName');
                 if (!persistenceUtils.matchTable(currentTables)) {
 
-                    // 返回表明列表
-                    var keys = _.keys(currentTables);
+                    // 打包数据   XXXXXXXXXXXX 构建自定义数据读取函数
+                    persistence.dump(null, persistenceUtils.entityList, function(dump) {
 
-                    // 获得表的构造函数
-                    var tableList = _.map(keys, function(key) {
-                        return persistence.define(key);
-                    });
 
-                    // 打包数据
-                    persistence.dump(null, tableList, function(dump) {
                         // 删除表结构
                         persistence.reset(null, function() {
-                            // 定义默认表
-                            var DefTable = persistenceUtils.init();
 
+                            // 重新构建表结构
                             persistence.schemaSync(null, function() {
 
-                                // 定义其他表
-                                persistenceUtils.initOther();
+                                // 添加默认表数据
+                                persistenceUtils.addDefTable();
 
-                                // persistence 同步数据库
-                                persistence.schemaSync(null, function() {
+                                // 加载打包数据
+                                persistence.load(null, dump, function() {
 
-                                    // 加载打包数据
-                                    persistence.load(null, dump, function() {
-
-                                    });
                                 });
                             });
                         });
@@ -132,11 +176,8 @@
         // 初始化表结构
         persistenceUtils.init();
 
-        // persistence 同步数据库
-        persistence.schemaSync(null, function() {
-            // 同步表结构
-            persistenceUtils.syncTable();
-        });
+        // 同步表结构
+        persistenceUtils.syncTable();
     }
 
     // 持久化数据
