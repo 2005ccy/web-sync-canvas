@@ -4,8 +4,8 @@
 
     // 默认数据表
     persistenceUtils.defTable = 'WSC_TABLE';
-    // 实体对象列表
-    persistenceUtils.entityList = [];
+    // 默认数据表字段
+    persistenceUtils.defTableFields = 'WSC_TABLE_FIELDS';
 
     // 需要持久化的表结构
     persistenceUtils.tableMap = {
@@ -13,7 +13,7 @@
             fieldName: 'name',
             fieldType: 'TEXT',
             tableName: 'CACHE_TABLE',
-            version: 14
+            version: 16
         }, {
             fieldName: 'desc',
             fieldType: 'TEXT',
@@ -25,13 +25,23 @@
     // 定义默认表结构
     persistenceUtils.init = function() {
 
-        // 定义实体对象
-        persistence.define(persistenceUtils.defTable, {
-            fieldName: 'TEXT',
-            fieldType: 'TEXT',
+    	// 定义表
+        var Table = persistence.define(persistenceUtils.defTable, {
             tableName: 'TEXT',
-            version: 'INT'
+            version: 'INT',
+            relation: 'JSON'
         });
+
+        // 定义表字段
+        var TableFields = persistence.define(persistenceUtils.defTableFields, {
+            fieldName: 'TEXT',
+            fieldType: 'TEXT',            
+            version: 'INT',
+            validate: 'JSON',
+        });
+
+
+        Table.hasMany('fields', TableFields, 'tableId');
 
         // 构建默认表
         persistence.schemaSync(null, function() {
@@ -43,7 +53,6 @@
     // 定义其他表结构
     persistenceUtils.initOther = function() {
         var DefTable = persistence.define(persistenceUtils.defTable);
-        persistenceUtils.entityList = [];
         // 遍历表结构
         for (var key in persistenceUtils.tableMap) {
             var v = persistenceUtils.tableMap[key];
@@ -54,7 +63,7 @@
                 def[d.fieldName] = d.fieldType;
             }
             if (!_.isEmpty(def) && !persistence.isDefined(key)) {
-                persistenceUtils.entityList.push(persistence.define(key, def));
+                persistence.define(key, def);
             }
         }
     }
@@ -132,25 +141,27 @@
                 if (!persistenceUtils.matchTable(currentTables)) {
 
                     // 打包数据   XXXXXXXXXXXX 构建自定义数据读取函数
-                    persistence.dump(null, persistenceUtils.entityList, function(dump) {
+                    // persistence.dump(null, persistenceUtils.entityList, function(dump) {
+                    var dump = {
+                        'CACHE_TABLE': [{ 'id': 'D025F99DBACF42D794A8AAF6F3026666', 'name': 'aaaaaa', 'desc': '11111111111' }, { 'id': '9CBDA5BAB8314E6D960DE451A637777', 'name': 'bbbbbb', 'desc': '22222222222' }]
+                    };
 
+                    // 删除表结构
+                    persistence.reset(null, function() {
 
-                        // 删除表结构
-                        persistence.reset(null, function() {
+                        // 重新构建表结构
+                        persistence.schemaSync(null, function() {
 
-                            // 重新构建表结构
-                            persistence.schemaSync(null, function() {
+                            // 添加默认表数据
+                            persistenceUtils.addDefTable();
 
-                                // 添加默认表数据
-                                persistenceUtils.addDefTable();
+                            // 加载打包数据
+                            persistence.load(null, dump, function() {
 
-                                // 加载打包数据
-                                persistence.load(null, dump, function() {
-
-                                });
                             });
                         });
                     });
+                    // });
                     // 表结构相同，且为缓冲存储
                 } else if (persistenceUtils.isMemory) {
                     persistence.loadFromLocalStorage();

@@ -96,3 +96,38 @@ JSON:  任意JSON格式。该类型不能使用 filter、sort。该类型值被�
 
 // 是否为每个表的主键字段 'id'
 persistence.isImmutable(fieldName)
+
+// 关联表新建
+var Task = persistence.define('Task', {
+  name: "TEXT",
+  description: "TEXT",
+  done: "BOOL"
+});
+
+var Category = persistence.define('Category', {
+  name: "TEXT",
+  metaData: "JSON"
+});
+
+Category.hasMany('tasks', Task, 'category');
+
+persistence.schemaSync();
+
+var c = new Category({name: "Main category"});
+persistence.add(c);
+for ( var i = 0; i < 5; i++) {
+  var t = new Task();
+  t.name = 'Task ' + i;
+  t.done = i % 2 == 0;
+  t.category = c;
+  persistence.add(t);
+}
+
+persistence.flush();
+
+var C = persistence.define('Category');
+C.load('ADD3177F6FF146CC85A8770B45B136E7', function(d) {
+   d.tasks.list(function(ls) {
+      console.info(JSON.stringify(ls));
+   });
+});
