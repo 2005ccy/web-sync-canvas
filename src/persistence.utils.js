@@ -8,24 +8,53 @@
     persistenceUtils.defTableFields = 'WSC_TABLE_FIELDS';
 
     // 需要持久化的表结构
-    persistenceUtils.tableMap = {
-        'CACHE_TABLE': [{
+    persistenceUtils.tableList = [{
+        tableName: 'Category',
+        version: 1,
+        relation: [{
+            relationType: 'hasMany',
+            relationField: 'tasks',
+            targetEntity: 'Task',
+            targetField: 'category'
+        }],
+        fields: [{
             fieldName: 'name',
             fieldType: 'TEXT',
-            tableName: 'CACHE_TABLE',
-            version: 16
+            validate: [{
+                required: true
+            }]
         }, {
-            fieldName: 'desc',
-            fieldType: 'TEXT',
-            tableName: 'CACHE_TABLE',
-            version: 1
+            fieldName: 'metaData',
+            fieldType: 'JSON',
+            validate: []
         }]
-    };
+    }, {
+        tableName: 'Task',
+        version: 1,
+        relation: [],
+        fields: [{
+            fieldName: 'name',
+            fieldType: 'TEXT',
+            validate: [{
+                required: true
+            }]
+        }, {
+            fieldName: 'description',
+            fieldType: 'TEXT',
+            validate: []
+        }, {
+            fieldName: 'done',
+            fieldType: 'BOOL',
+            validate: [{
+                required: true
+            }]
+        }]
+    }];
 
     // 定义默认表结构
     persistenceUtils.init = function() {
 
-    	// 定义表
+        // 定义表
         var Table = persistence.define(persistenceUtils.defTable, {
             tableName: 'TEXT',
             version: 'INT',
@@ -35,13 +64,12 @@
         // 定义表字段
         var TableFields = persistence.define(persistenceUtils.defTableFields, {
             fieldName: 'TEXT',
-            fieldType: 'TEXT',            
-            version: 'INT',
-            validate: 'JSON',
+            fieldType: 'TEXT',
+            validate: 'JSON'
         });
 
 
-        Table.hasMany('fields', TableFields, 'tableId');
+        Table.hasMany('fields', TableFields, 'table');
 
         // 构建默认表
         persistence.schemaSync(null, function() {
@@ -52,18 +80,39 @@
 
     // 定义其他表结构
     persistenceUtils.initOther = function() {
-        var DefTable = persistence.define(persistenceUtils.defTable);
+
+        var relationMap = {};
+        var entityMap = {};
         // 遍历表结构
-        for (var key in persistenceUtils.tableMap) {
-            var v = persistenceUtils.tableMap[key];
+        for (var i in persistenceUtils.tableList) {
+            var t = persistenceUtils.tableList[i];
 
             var def = {};
-            for (var i in v) {
+            for (var i in t.fields) {
                 var d = v[i];
                 def[d.fieldName] = d.fieldType;
             }
             if (!_.isEmpty(def) && !persistence.isDefined(key)) {
-                persistence.define(key, def);
+                var e = persistence.define(key, def);
+                if (!_.isEmpty(t.relation) && _.isArray(t.relation)) {
+                    relationMap[key] = t.relation;
+                }
+                entityMap[key] = e;
+            }
+        }
+        if (!_.isEmpty(relationMap)) {
+            for (var k in relationMap) {
+                var rl = relationMap[k];
+                var e = entityMap[k];
+                for (var i in rl) {
+                    var r = rl[i];
+
+                    if (r.relationType === 'hasMany') {
+                        e.hasMany(r.relationField, entityMap[r.targetEntity], r.targetField);
+                    } else if (r.relationType === 'hasOne') {
+                        e.hasOne(r.relationField, entityMap[r.targetEntity]);
+                    }
+                }
             }
         }
     }
@@ -71,15 +120,34 @@
     // 定义其他表结构
     persistenceUtils.addDefTable = function() {
         var DefTable = persistence.define(persistenceUtils.defTable);
+        var DefTableFields = persistence.define(persistenceUtils.defTableFields);
         // 遍历表结构
-        for (var key in persistenceUtils.tableMap) {
-            var v = persistenceUtils.tableMap[key];
+        for (var i in persistenceUtils.tableList) {
+            var t = persistenceUtils.tableList[i];
 
-            for (var i in v) {
-                var d = v[i];
+            var r = t.relation || [];
+            var rs = JSON.stringify(r);
+            var dr = new DefTable({ 
+            	'tableName': t.tableName, 
+            	'version': t.version,
+            	'relation': rs
+           	});
 
-                var dr = new DefTable(d);
-                persistence.add(dr);
+            persistence.add(dr);
+
+            for(var j in t.fields) {
+            	var f = t.fields[j];
+
+            	var v = f.validate || [];
+            	var vs = JSON.stringify(v);
+            	var dtf = DefTableFields({
+            		fieldName: f.fieldName,
+            		fieldType: f.fieldType,
+            		table: dr,
+            		validate: vs
+            	});
+
+            	persistence.add(dtf);
             }
         }
         persistenceUtils.flush();
