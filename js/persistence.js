@@ -223,7 +223,7 @@ persistence.get = function(arg1, arg2) {
      * @return the entity's constructor
      */
     persistence.define = function (entityName, fields) {
-      if (entityMeta[entityName]) { // Already defined, ignore
+      if (entityMeta[entityName] && !fields) { // Already defined, ignore
         return getEntity(entityName);
       }
       var meta = {

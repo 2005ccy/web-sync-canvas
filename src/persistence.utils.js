@@ -21,7 +21,8 @@
             fieldName: 'name',
             fieldType: 'TEXT',
             validate: [{
-                required: true
+            	type: 'required',
+            	msg: '';
             }]
         }, {
             fieldName: 'metaData',
@@ -51,7 +52,10 @@
         }]
     }];
 
-    // 定义默认表结构
+    /**
+     * [init 初始化默认表结构]
+     * @return {[type]} [description]
+     */
     persistenceUtils.init = function() {
 
         // 定义表
@@ -68,47 +72,53 @@
             validate: 'JSON'
         });
 
-
         Table.hasMany('fields', TableFields, 'table');
-
-        // 构建默认表
-        persistence.schemaSync(null, function() {
-            // 定义其他实体
-            persistenceUtils.initOther();
-        });
     }
 
-    // 定义其他表结构
+    /**
+     * [initOther 初始化其他表信息]
+     */
     persistenceUtils.initOther = function() {
 
+        // 表关系map
         var relationMap = {};
+        // 实体map
         var entityMap = {};
+        // 其余表的配置信息
+        var tl = persistenceUtils.tableList || [];
         // 遍历表结构
-        for (var i in persistenceUtils.tableList) {
-            var t = persistenceUtils.tableList[i];
+        for (var i in tl) {
+            var t = tl[i];
 
+            // 手机字段类型
             var def = {};
             for (var i in t.fields) {
                 var d = v[i];
                 def[d.fieldName] = d.fieldType;
             }
-            if (!_.isEmpty(def) && !persistence.isDefined(key)) {
+
+            if (!_.isEmpty(def)) {
+                // 定义表结构
                 var e = persistence.define(key, def);
+                // 记录表关系
                 if (!_.isEmpty(t.relation) && _.isArray(t.relation)) {
                     relationMap[key] = t.relation;
                 }
+                // 记录实体
                 entityMap[key] = e;
             }
         }
+        // 创建表关系
         if (!_.isEmpty(relationMap)) {
             for (var k in relationMap) {
                 var rl = relationMap[k];
                 var e = entityMap[k];
                 for (var i in rl) {
                     var r = rl[i];
-
+                    // 建立一对多的关系
                     if (r.relationType === 'hasMany') {
                         e.hasMany(r.relationField, entityMap[r.targetEntity], r.targetField);
+                        // 创建一对一的关系
                     } else if (r.relationType === 'hasOne') {
                         e.hasOne(r.relationField, entityMap[r.targetEntity]);
                     }
@@ -117,120 +127,205 @@
         }
     }
 
-    // 定义其他表结构
+    /**
+     * [addDefTable 将表配置文件，插入数据库]
+     */
     persistenceUtils.addDefTable = function() {
         var DefTable = persistence.define(persistenceUtils.defTable);
         var DefTableFields = persistence.define(persistenceUtils.defTableFields);
         // 遍历表结构
-        for (var i in persistenceUtils.tableList) {
-            var t = persistenceUtils.tableList[i];
+        var tl = persistenceUtils.tableList || [];
+        for (var i in tl) {
+            var t = tl[i];
 
+            // 向默认表中添加数据
             var r = t.relation || [];
-            var rs = JSON.stringify(r);
-            var dr = new DefTable({ 
-            	'tableName': t.tableName, 
-            	'version': t.version,
-            	'relation': rs
-           	});
-
+            var dr = new DefTable({
+                'tableName': t.tableName,
+                'version': t.version,
+                'relation': r
+            });
             persistence.add(dr);
 
-            for(var j in t.fields) {
-            	var f = t.fields[j];
+            // 向默认字段表中添加数据
+            for (var j in t.fields) {
+                var f = t.fields[j];
 
-            	var v = f.validate || [];
-            	var vs = JSON.stringify(v);
-            	var dtf = DefTableFields({
-            		fieldName: f.fieldName,
-            		fieldType: f.fieldType,
-            		table: dr,
-            		validate: vs
-            	});
-
-            	persistence.add(dtf);
+                var v = f.validate || [];
+                var dtf = DefTableFields({
+                    fieldName: f.fieldName,
+                    fieldType: f.fieldType,
+                    table: dr,
+                    validate: v
+                });
+                persistence.add(dtf);
             }
         }
+        // 执行数据插入
         persistenceUtils.flush();
     }
 
-    // 定义其他表结构
-    persistenceUtils.matchTable = function(currentTables) {
-        var map = persistenceUtils.tableMap;
-        for (var k in map) {
+    /**
+     * [matchTable 表配置数据与数据库中表数据是否匹配]
+     * @param  {[type]} tableList [数据库中表]
+     * @return {[type]}           [description]
+     */
+    persistenceUtils.matchTable = function(tableList) {
+        // 配置表数据
+        var tl = persistenceUtils.tableList || [];
+        // 表的个数不相同
+        if (tl.length !== tableList.length) return false;
+        // 遍历配置表与数据表比对
+        for (var i in tl) {
             // field list
-            var v = map[k];
-            var m = currentTables[k];
+            var t = tl[i];
+            var tn = t.tableName;
+            var tv = t.version;
 
-            if (v.length != m.length) return false;
-
-            for (var i in v) {
+            var fm = false;
+            for (var i in tableList) {
                 // field
-                var vv = v[i];
-                var fn = vv.fieldName;
-                var ft = vv.fieldType;
-                var fv = vv.version;
-
-                var fm = false;
-                for (var j in m) {
-                    var jv = m[j];
-                    var fnj = jv.fieldName;
-                    var ftj = jv.fieldType;
-                    var fvj = jv.version;
-
-                    if (fn === fnj) {
-                        if (ft !== ftj || fv !== fvj) return false;
-                        fm = true;
-                    }
+                var v = tableList[i];
+                var vn = v.tableName;
+                var vv = v.version;
+                // 是否表相同
+                if (tn === vn) {
+                    fm = true;
+                    // 是否版本相同
+                    if (tv != vv) return false;
                 }
-                if (!fm) return false;
             }
+            // 配置表为新表
+            if (!fm) return false;
         }
         return true;
     }
 
-    // 同步表到新结构
+    /**
+     * [initOldRelation 执行原有数据库的关系]
+     * @param  {[type]} i           [当前索引]
+     * @param  {[type]} size        [表个数]
+     * @param  {[type]} relationMap [关系缓存]
+     * @param  {[type]} entityMap   [实体缓存]
+     * @param  {[type]} callback    [执行完的回调]
+     * @return {[type]}             [description]
+     */
+    persistenceUtils.initOldRelation = function(i, size, relationMap, entityMap, callback) {
+        if (i == size) {
+            if (!_.isEmpty(relationMap)) {
+                for (var k in relationMap) {
+                    var rl = relationMap[k];
+                    var e = entityMap[k];
+                    for (var i in rl) {
+                        var r = rl[i];
+                        // 两表建立一对多关系
+                        if (r.relationType === 'hasMany') {
+                            e.hasMany(r.relationField, entityMap[r.targetEntity], r.targetField);
+                        } else if (r.relationType === 'hasOne') {
+                            e.hasOne(r.relationField, entityMap[r.targetEntity]);
+                        }
+                    }
+                }
+            }
+            _.isFunction(callback) && callback();
+        }
+    }
+
+    /**
+     * [initOld 定义老的表结构]
+     * @param  {[type]} tableList [数据库中表结构]
+     * @return {[type]}           [description]
+     */
+    persistenceUtils.initOld = function(tableList, callback) {
+
+        var relationMap = {};
+        var entityMap = {};
+
+        var tl = tableList || [];
+        var size = tl.length;
+        var index = 0;
+
+        // 遍历表结构
+        for (var i in tl) {
+            var t = tl
+            var tn = t.tableName;
+            // 查询表的字段数据
+            t.fields.list(function(list) {
+                // 字段名称：字段类型
+                var fd = {};
+                for (var j in list) {
+                    var f = list[j];
+                    fd[f.fieldName] = f.fieldType;
+                }
+                if (!_.isEmpty(def)) {
+                    // 定义表结构
+                    var e = persistence.define(key, fd);
+                    // 缓存关系数据
+                    if (!_.isEmpty(t.relation) && _.isArray(t.relation)) {
+                        relationMap[key] = t.relation;
+                    }
+                    // 缓存实体
+                    entityMap[tn] = e;
+                    // 初始化表之间关系
+                    persistenceUtils.initOldRelation(++index, size, relationMap, entityMap, callback);
+                }
+            });
+        }
+    }
+
+    /**
+     * [syncTable 同步数据库为配置数据]
+     * @return {[type]} [description]
+     */
     persistenceUtils.syncTable = function() {
 
         if (persistence.isDefined(persistenceUtils.defTable)) {
             // 存在实体，获得对象类
             var DefTable = persistence.define(persistenceUtils.defTable);
+            // 查询数据库表数据
             DefTable.all().list(null, function(results) {
 
                 // 如果默认表中没有数据，插入其他表
                 if (_.isEmpty(results)) {
+                    // 定义其他数据对象
+                    persistenceUtils.initOther();
+                    // 加载默认数据
                     persistence.schemaSync(null, function() {
                         persistenceUtils.addDefTable();
                     });
                     return;
                 }
 
-                // 转换结构
-                var currentTables = _.groupBy(results, 'tableName');
-                if (!persistenceUtils.matchTable(currentTables)) {
+                // 配置与当前数据对比
+                if (!persistenceUtils.matchTable(results)) {
+                    // 定义现有表结构
+                    persistenceUtils.initOld(resultes, function() {
+                        // 读取现有数据
+                        persistence.dump(function(dump) {
+                            // 删除表结构
+                            persistence.reset(null, function() {
 
-                    // 打包数据   XXXXXXXXXXXX 构建自定义数据读取函数
-                    // persistence.dump(null, persistenceUtils.entityList, function(dump) {
-                    var dump = {
-                        'CACHE_TABLE': [{ 'id': 'D025F99DBACF42D794A8AAF6F3026666', 'name': 'aaaaaa', 'desc': '11111111111' }, { 'id': '9CBDA5BAB8314E6D960DE451A637777', 'name': 'bbbbbb', 'desc': '22222222222' }]
-                    };
+                                // 定义其他数据对象
+                                persistenceUtils.initOther();
+                                // 重新构建表结构
+                                persistence.schemaSync(null, function() {
 
-                    // 删除表结构
-                    persistence.reset(null, function() {
+                                    // 添加默认表数据
+                                    persistenceUtils.addDefTable();
+                                    // 加载打包数据
+                                    if (dump) {
+                                        delete dump[persistenceUtils.defTable];
+                                        delete dump[persistenceUtils.defTableFields];
+                                        // 将老数据同步到新的表中
+                                        persistence.load(null, dump, function() {
 
-                        // 重新构建表结构
-                        persistence.schemaSync(null, function() {
-
-                            // 添加默认表数据
-                            persistenceUtils.addDefTable();
-
-                            // 加载打包数据
-                            persistence.load(null, dump, function() {
-
+                                        });
+                                    }
+                                });
                             });
                         });
                     });
-                    // });
-                    // 表结构相同，且为缓冲存储
+                    // 如果为缓冲，加载localStorage数据
                 } else if (persistenceUtils.isMemory) {
                     persistence.loadFromLocalStorage();
                 }
@@ -238,7 +333,10 @@
         }
     }
 
-    // 开始执行
+    /**
+     * [start 数据加载]
+     * @return {[type]} [description]
+     */
     persistenceUtils.start = function() {
 
         if (location.protocol == "file:") {
@@ -255,11 +353,36 @@
         // 初始化表结构
         persistenceUtils.init();
 
-        // 同步表结构
-        persistenceUtils.syncTable();
+        // 构建默认表
+        persistence.schemaSync(null, function() {
+            // 同步表结构
+            persistenceUtils.syncTable();
+        });
     }
 
-    // 持久化数据
+    /**
+     * [validate 验证数据格式]
+     * @param  {[type]} entity [实体值]
+     * @return {[type]}        [description]
+     */
+    persistenceUtils.validate = function(entity) {
+
+        return true;
+    }
+
+    /**
+     * [add 添加数据并验证数据合法性]
+     * @param {Function} callback [description]
+     */
+    persistenceUtils.add = function(entity, callback) {
+
+    }
+
+    /**
+     * [flush 持久化数据，并同步到后台，或是缓存到localStorage]
+     * @param  {Function} callback [description]
+     * @return {[type]}            [description]
+     */
     persistenceUtils.flush = function(callback) {
         persistence.flush(null, function() {
             // 同步缓存数据到 localStorage
