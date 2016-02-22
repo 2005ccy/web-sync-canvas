@@ -22,7 +22,7 @@
             fieldType: 'TEXT',
             validate: [{
             	type: 'required',
-            	msg: '';
+            	msg: ''
             }]
         }, {
             fieldName: 'metaData',
@@ -89,11 +89,12 @@
         // 遍历表结构
         for (var i in tl) {
             var t = tl[i];
+            var key = t.tableName;
 
             // 手机字段类型
             var def = {};
             for (var i in t.fields) {
-                var d = v[i];
+                var d = t.fields[i];
                 def[d.fieldName] = d.fieldType;
             }
 
@@ -152,7 +153,7 @@
                 var f = t.fields[j];
 
                 var v = f.validate || [];
-                var dtf = DefTableFields({
+                var dtf = new DefTableFields({
                     fieldName: f.fieldName,
                     fieldType: f.fieldType,
                     table: dr,
@@ -247,7 +248,7 @@
 
         // 遍历表结构
         for (var i in tl) {
-            var t = tl
+            var t = tl[i];
             var tn = t.tableName;
             // 查询表的字段数据
             t.fields.list(function(list) {
@@ -299,7 +300,7 @@
                 // 配置与当前数据对比
                 if (!persistenceUtils.matchTable(results)) {
                     // 定义现有表结构
-                    persistenceUtils.initOld(resultes, function() {
+                    persistenceUtils.initOld(results, function() {
                         // 读取现有数据
                         persistence.dump(function(dump) {
                             // 删除表结构
