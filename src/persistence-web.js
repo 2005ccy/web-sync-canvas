@@ -8,49 +8,7 @@
     persistenceUtils.defTableFields = 'WSC_TABLE_FIELDS';
 
     // 需要持久化的表结构
-    persistenceUtils.tableList = [{
-        tableName: 'Category',
-        version: 1,
-        relation: [{
-            relationType: 'hasMany',
-            relationField: 'tasks',
-            targetEntity: 'Task',
-            targetField: 'category'
-        }],
-        fields: [{
-            fieldName: 'name',
-            fieldType: 'TEXT',
-            validate: [{
-            	type: 'required',
-            	msg: ''
-            }]
-        }, {
-            fieldName: 'metaData',
-            fieldType: 'JSON',
-            validate: []
-        }]
-    }, {
-        tableName: 'Task',
-        version: 1,
-        relation: [],
-        fields: [{
-            fieldName: 'name',
-            fieldType: 'TEXT',
-            validate: [{
-                required: true
-            }]
-        }, {
-            fieldName: 'description',
-            fieldType: 'TEXT',
-            validate: []
-        }, {
-            fieldName: 'done',
-            fieldType: 'BOOL',
-            validate: [{
-                required: true
-            }]
-        }]
-    }];
+    persistenceUtils.tableList = window.wscTables;
 
     /**
      * [init 初始化默认表结构]
