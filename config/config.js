@@ -1,3 +1,9 @@
+// 服务器列表
+var serveList = [
+    'http://localhost'
+];
+
+// 表结构列表
 var tables = [{
     tableName: 'Category',
     version: 1,
@@ -42,11 +48,15 @@ var tables = [{
     }]
 }];
 
+
+
 // 服务器端数据导出
 if (typeof exports !== 'undefined') {
 	exports.wscTables = tables;
+    exports.wscServeList = serveList;
 // web端数据导出
 } else {
 	window = window || {};
 	window.wscTables = tables;
+    window.wscServeList = serveList;
 }

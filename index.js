@@ -14,6 +14,7 @@ app.set('view engine', 'jade');
 
 app.use('/js', express.static('js'));
 app.use('/src', express.static('src'));
+app.use('/config', express.static('config'));
 app.use(express.static('page'));
 
 // 读取页面结构
@@ -41,4 +42,5 @@ io.on('connection', function(socket) {
     socket.on('my other event', function(data) {
         console.log(data);
     });
+    socket.emit('event', {'eventName': 'socket.io-client request!!'})
 });
